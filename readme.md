@@ -1,46 +1,64 @@
-# Introduction
-This is a Python script that exports data from a PostgreSQL database to an excel file. It connects to the database using psycopg2, runs a query, fetches the results, converts it into a Pandas DataFrame, and finally exports the DataFrame to an excel file using the to_excel function.
+# Automated SQL Pull
+
+Automates the recurring task of running a stored SQL statement against a PostgreSQL database and exporting the result set to an Excel workbook. The repository is intentionally lightweight so it can be dropped into a Windows host, pointed at any Postgres instance, and scheduled through Task Scheduler.
+
+## Project structure
+
+| File | Purpose |
+| --- | --- |
+| `asps.py` | Core script that loads credentials, executes `asps.sql`, builds a Pandas DataFrame, and saves the file to the configured drop path. |
+| `asps.sql` | Template SQL file that contains the query you want to automate. Edit this with any valid Postgres statement. |
+| `asps.bat` | Sample Task Scheduler friendly batch file that activates your Python environment and runs `asps.py`. |
 
 ## Requirements
 
-This script requires the following packages:
+- Python 3.9+
+- Packages: `psycopg2` (or `psycopg2-binary`), `pandas`, `sqlalchemy`, `openpyxl`
+- Access to the destination PostgreSQL instance and file share where the Excel file will land
 
-- psycopg2
+Create and activate a virtual environment, then install the dependencies:
 
-- csv
+```bash
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install pandas psycopg2-binary sqlalchemy openpyxl
+```
 
-- pandas
+## Configuration
 
-- sqlalchemy
+Open `asps.py` and update the placeholders that are flagged near the top of the file:
 
-- datetime
+- `host`, `database`, `port`, `user`, `password` – point these at your Postgres server.
+- `cfile` – path to a two-line text file that stores the username on line 1 and password on line 2, e.g.:
 
-- os
+  ```
+  reporting_user
+  supersecretpassword
+  ```
 
-- pathlib
+- `query_path` – relative or absolute path to the SQL file you want to run (defaults to `asps.sql`).
+- `filename` – output Excel file name (use an `.xlsx` extension).
+- `drop_path` – folder that will receive the export; `drop_file` is automatically derived.
 
-- time
-
-- shutil
-
+You can keep multiple SQL templates under version control and point `query_path` to the one you need before running the script.
 
 ## Usage
 
-Replace the following variables with your desired values:
+```bash
+python asps.py
+```
 
-- cfile: the location of the file that contains your database credentials
+The script will log into Postgres, run the SQL found in `query_path`, and write the results to the Excel file configured via `drop_file`. Success or failure, together with the runtime, is written to stdout.
 
-- filename: the name of the excel file you want to export the data to
+### Scheduling on Windows
 
-- drop_path: the file path where you want the excel file to be exported to
+Use `asps.bat` as a starting point:
 
-The script logs onto the database using the credentials provided in cfile. It then runs a query from the file asps.sql. 
+1. Replace the `@CALL` line with the path to the `activate.bat` for the environment that contains your dependencies.
+2. Replace the final `python` command with the path to `asps.py`.
+3. Point a Task Scheduler job at the batch file and configure the trigger that matches your reporting cadence.
 
-The results from the query are then fetched, converted into a Pandas DataFrame, and exported to an excel file using the to_excel function.
+## Troubleshooting
 
-To begin this code, there is a _'.bat'_ file that you can schedule within your task scheduler (windows environment).  
-
-#### **_Please be sure to update the information in the '.bat' file to fit your own python set up._**
-
-## Error Handling
-The script includes an error handling mechanism that logs any errors that occur during the process. If the process is completed successfully, the output will be "Process Successfully Completed." If there is an error, the error message will be logged and the output will be "Process Completed Unsuccessfully."
+- **Authentication errors** usually mean the credentials file cannot be located or the username/password in that file are stale.
+- **Missing columns in the Excel export** indicate the SQL query did not alias fields the way you expect; inspect `asps.sql` and rerun locally before automating.
